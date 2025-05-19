@@ -2,3 +2,5 @@ matplotlib
 streamlit
 seaborn
 scikit-learn
+sklearn
+plotly
