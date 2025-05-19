@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -17,7 +16,7 @@ df = df[df["Location Level"] == "Province"]
 st.sidebar.title("COVID-19 Dashboard")
 selected_view = st.sidebar.radio("Pilih Tampilan", ["Peta Clustering", "Tren Harian", "Prediksi Kasus"])
 
-# Fitur clustering
+# --- CLUSTERING ---
 features = ["Total Cases per Million", "Total Deaths per Million", 
             "Population Density", "Growth Factor of New Cases"]
 data = df[features].dropna()
@@ -29,7 +28,6 @@ clusters = kmeans.fit_predict(data_scaled)
 df_filtered = df.loc[data.index].copy()
 df_filtered['Cluster'] = clusters
 
-# PETA CLUSTERING
 if selected_view == "Peta Clustering":
     st.title("Clustering Wilayah di Indonesia")
     fig = px.scatter_geo(df_filtered,
@@ -42,23 +40,25 @@ if selected_view == "Peta Clustering":
     st.subheader("Karakteristik Tiap Cluster")
     st.dataframe(df_filtered.groupby("Cluster")[features].mean())
 
-# TREND KASUS HARIAN
+# --- TREN HARIAN ---
 elif selected_view == "Tren Harian":
     st.title("Tren Kasus Harian Nasional")
-    df_nasional = df[df["Location"] == "Indonesia"]
-    daily_cols = ["New Cases", "New Deaths", "New Recovered"]
-    df_nasional["Date"] = pd.to_datetime(df_nasional["Date"])
-    df_nasional = df_nasional.sort_values("Date")
 
-    fig = px.line(df_nasional, x="Date", y=daily_cols, title="Tren Harian Kasus, Kematian, dan Sembuh")
+    df["Date"] = pd.to_datetime(df["Date"])
+    df_nasional = df.groupby("Date")[["New Cases", "New Deaths", "New Recovered"]].sum().reset_index()
+
+    fig = px.line(df_nasional, x="Date", y=["New Cases", "New Deaths", "New Recovered"],
+                  title="Tren Harian Kasus, Kematian, dan Sembuh")
     st.plotly_chart(fig)
 
-# PREDIKSI KASUS
+# --- PREDIKSI KASUS ---
 elif selected_view == "Prediksi Kasus":
     st.title("Prediksi Jumlah Total Kasus (Supervised Learning)")
 
-    # Ambil fitur prediktor
+    # Preprocessing: Bersihkan persentase
     df_pred = df[["Total Deaths", "Total Recovered", "Population Density", "Case Fatality Rate", "Total Cases"]].dropna()
+    df_pred["Case Fatality Rate"] = df_pred["Case Fatality Rate"].replace('%', '', regex=True).astype(float)
+
     X = df_pred[["Total Deaths", "Total Recovered", "Population Density", "Case Fatality Rate"]]
     y = df_pred["Total Cases"]
 
@@ -69,7 +69,7 @@ elif selected_view == "Prediksi Kasus":
     death = st.number_input("Total Deaths", min_value=0)
     recovered = st.number_input("Total Recovered", min_value=0)
     density = st.number_input("Population Density", min_value=0.0)
-    fatality = st.number_input("Case Fatality Rate", min_value=0.0)
+    fatality = st.number_input("Case Fatality Rate (tanpa %)", min_value=0.0)
 
     pred = model.predict([[death, recovered, density, fatality]])[0]
     st.success(f"Prediksi Total Kasus: {int(pred):,}")
