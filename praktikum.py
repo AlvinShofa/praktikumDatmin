@@ -1,12 +1,18 @@
 # praktikum.py
 import pandas as pd
 import streamlit as st
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix
-from imblearn.over_sampling import SMOTE
 import matplotlib.pyplot as plt
 import seaborn as sns
+
+# Coba import modul klasifikasi, dan jika tidak ada tampilkan error
+try:
+    from sklearn.model_selection import train_test_split
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import classification_report, confusion_matrix
+    from imblearn.over_sampling import SMOTE
+except ModuleNotFoundError as e:
+    st.error(f"❌ Modul tidak ditemukan: {e}. Pastikan semua pustaka telah diinstal.")
+    st.stop()
 
 st.set_page_config(page_title="COVID-19 Risk Classification", layout="centered")
 st.title("🦠 COVID-19 Risk Level Classification Dashboard")
@@ -31,8 +37,7 @@ def load_data():
     # Hitung nilai maksimum total kasus
     max_val = df['Total Cases'].max()
 
-    # Tentukan bins secara dinamis berdasarkan nilai maksimum
-    # Jika data terlalu kecil, gunakan hanya 2 kategori
+    # Buat bins dinamis
     if max_val <= 1000:
         bins = [0, max_val + 1]
         labels = ['Low']
@@ -43,50 +48,48 @@ def load_data():
         bins = [0, 1000, 10000, max_val + 1]
         labels = ['Low', 'Medium', 'High']
 
-    # Pastikan bins naik dan unik
+    # Pastikan bins meningkat
     bins = sorted(set(bins))
 
-    # Buat label sesuai jumlah interval
     if len(labels) != len(bins) - 1:
-        labels = [f"Level {i+1}" for i in range(len(bins)-1)]
+        labels = [f"Level {i+1}" for i in range(len(bins) - 1)]
 
-    # Assign kategori risiko
     df['Risk Level'] = pd.cut(df['Total Cases'], bins=bins, labels=labels, include_lowest=True)
 
     return df
 
-# Ambil data
+# Load
 df = load_data()
 st.subheader("📋 Data Overview")
 st.dataframe(df)
 
-# Cek jumlah kelas
+# Validasi label
 if df['Risk Level'].nunique() < 2:
-    st.error("⚠️ Data tidak memiliki cukup variasi kelas untuk klasifikasi. Silakan periksa data atau ubah batas kategori.")
+    st.error("⚠️ Jumlah kategori risiko terlalu sedikit untuk klasifikasi.")
     st.stop()
 
 # Fitur dan Target
 X = df[['Total Deaths', 'Total Recovered', 'Population Density', 'Case Fatality Rate']]
 y = df['Risk Level']
 
-# Balancing dengan SMOTE
+# SMOTE balancing
 try:
     smote = SMOTE(random_state=42)
     X_resampled, y_resampled = smote.fit_resample(X, y)
 except ValueError as e:
-    st.error(f"❌ Gagal melakukan SMOTE: {e}")
+    st.error(f"❌ Gagal SMOTE: {e}")
     st.stop()
 
-# Split train-test
+# Train-Test Split
 X_train, X_test, y_train, y_test = train_test_split(X_resampled, y_resampled, test_size=0.2, random_state=42)
 
-# Random Forest Classifier
+# Random Forest Model
 model = RandomForestClassifier(random_state=42)
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 
-# Evaluasi Model
-st.header("📊 Model Evaluation")
+# Evaluation
+st.header("📊 Evaluation")
 st.text("Classification Report:")
 st.text(classification_report(y_test, y_pred))
 
@@ -97,11 +100,11 @@ fig, ax = plt.subplots()
 sns.heatmap(cm, annot=True, fmt='d', cmap="Blues", xticklabels=model.classes_, yticklabels=model.classes_, ax=ax)
 st.pyplot(fig)
 
-# Distribusi Prediksi
-st.subheader("📈 Distribusi Klasifikasi")
+# Visualisasi Prediksi
+st.subheader("📈 Risk Level Distribution")
 st.bar_chart(pd.Series(y_pred).value_counts())
 
-# Grafik Tren Harian (Opsional)
+# Tren Kasus Harian
 st.header("📅 Daily Cases Trend")
 try:
     df_raw = pd.read_csv("covid_19_indonesia_time_series_all.csv")
@@ -110,4 +113,4 @@ try:
     df_trend = df_raw.groupby('Date')['New Cases'].sum()
     st.line_chart(df_trend)
 except Exception as e:
-    st.warning(f"Gagal menampilkan grafik tren: {e}")
+    st.warning(f"❗ Gagal menampilkan grafik tren: {e}")
